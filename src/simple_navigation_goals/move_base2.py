@@ -7,7 +7,7 @@ from actionlib_msgs.msg import *
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from tf.transformations import quaternion_from_euler
-from math import radians, pi
+from math import radians, pi, hypot
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, LaserScan, CameraInfo
@@ -204,12 +204,12 @@ class MoveBase():
         rospy.loginfo("Starting navigation test")
 
         if not rospy.is_shutdown():
-	    goal = MoveBaseGoal()
+	    self.final_goal = MoveBaseGoal()
             x, y = input("give x,y\n")
-    	    goal.target_pose.header.frame_id = 'map'
-            goal.target_pose.header.stamp = rospy.Time.now()
-            goal.target_pose.pose = Pose(Point(x, y, 0), Quaternion(0,0, 0, 1)
-            self.move(goal)
+    	    self.final_goal.target_pose.header.frame_id = 'map'
+            self.final_goal.target_pose.header.stamp = rospy.Time.now()
+            self.final_goal.target_pose.pose = Pose(Point(x, y, 0), Quaternion(0,0, 0, 1)
+            self.move(self.final_goal)
             rospy.spin()
 
     def done_cb(self, terminal_state, result):

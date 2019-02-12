@@ -12,6 +12,7 @@ import cv2
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, LaserScan, CameraInfo
 import numpy as np
+from numpy.linalg import norm
 from operator import add, sub
 import tf
 from tf.transformations import quaternion_from_euler
@@ -47,7 +48,7 @@ class MoveBase():
     def img_callback(self, data):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-            hsv_img = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)[300:, :]
+            hsv_img = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)[200:, :]
             color = (255,0,0)
             color_hsv = np.array(color,dtype="uint8")
             color_hsv = np.array([[color_hsv]],dtype="uint8")
@@ -73,11 +74,10 @@ class MoveBase():
                 (x,y),radius = cv2.minEnclosingCircle(selected_contour)
 		x, y, w, h = cv2.boundingRect(selected_contour)
                 cv2.rectangle(hsv_img,(x,y),(x+w, y+h),(0,255,0),2)
-
                 self.angle = int(np.rad2deg(self.find_angle(x + (w/2), hsv_img.shape[1], self.OPENNING_ANGLE)))
 
                 self.right_angle = int(np.rad2deg(self.find_angle(x, hsv_img.shape[1], self.OPENNING_ANGLE)))
-                self.left_angle = int(np.rad2deg(self.find_angle(x + (w), hsv_img.shape[1], self.OPENNING_ANGLE)))
+                self.left_angle = int(np.rad2deg(self.find_angle(x + w, hsv_img.shape[1], self.OPENNING_ANGLE)))
 
                 if w > 70 and (len(mask.nonzero()[1]) > 5000):
                     self.has_box = True
@@ -88,8 +88,9 @@ class MoveBase():
         except CvBridgeError as e:
             print(e)
 
-    def print_dists(self, left_box_average,
+    def print_dists(self,
                     left_out_box_average,
+                    left_box_average,
                     right_box_average,
                     right_out_box_average):
         print("--------------------------------------")
@@ -105,6 +106,9 @@ class MoveBase():
     def scan_callback(self, data):
         cloud = self.proj.projectLaser(data)
         cloud = np.array(list(pc2.read_points(cloud, skip_nans=True, field_names=("x", "y", "z"))))
+        cloud_norms = norm(cloud[:,:2], axis=1)
+        cloud = np.c_[cloud[:, :2], cloud_norms]
+
         plt.cla()
         plt.plot(cloud[:,0], cloud[:, 1], '*')
         plt.ylim(-2, 2)
@@ -113,42 +117,36 @@ class MoveBase():
 
         cloud_angles = np.rad2deg(np.arctan2(cloud[:, 1], cloud[:, 0]))
 
+
         to_mark = cloud[(cloud_angles > 10) & (cloud_angles < 20)]
-        plt.plot(to_mark[:,0], to_mark[:,1],'+' , color='red')
-        plt.draw()
-        plt.pause(0.000000001)
-        return
         avg_calc_range = 10
         rotate_to_space_epsilon = 10
+
         if self.has_box:
-            # angle_deg = np.rad2deg(self.angle)
-            # print("angle:" , self.angle)
-            angle_range = (self.angle + 360) % 360
 
-            while data.ranges[angle_range] == 0:
-                angle_range = (angle_range+1)%360
+           box_approx = cloud[(cloud_angles > self.angle - 5) &
+                              (cloud_angles < self.angle + 5)]
+           plt.plot(box_approx[:, 0], box_approx[:, 1],'+', color='red')
+           box_point = box_approx[box_approx.shape[0] / 2]
+           plt.plot(box_point[0], box_point[1], '+', color='yellow')
+           # cases = [
+           # (left_outer_med, left_inner_med, self.left_angle + rotate_to_space_epsilon),
+           # (right_outer_med, right_inner_med, self.right_angle - rotate_to_space_epsilon)
+           # ]
+           # for outer_med, inner_med, to_rotate in sorted(cases,
+           #                                               key=lambda x: x[1] - x[0]):
+           #     if ((outer_med - inner_med) > 0.1) and (inner_med < 0.6):
+           #        self.moving = True
+           #        print("will rotate:", to_rotate)
+           #        self.move2(calc_goal(0, to_rotate))
+           #        self.move2(calc_goal(inner_med + 0.1, 0))
+           #        break
 
-            (left_box_average,
-             left_out_box_average,
-             right_box_average,
-             right_out_box_average) = [np.median([dist_for_angle(data.ranges, op(angle, i))
-                                                   for i in range(avg_calc_range)])
-                                       for angle, op in [(self.left_angle, sub),
-                                                         (self.left_angle, add),
-                                                         (self.right_angle, sub),
-                                                         (self.right_angle, add)]]
-
-            self.print_dists(left_box_average, left_out_box_average, right_box_average, right_out_box_average)
-
-            if ((left_out_box_average- left_box_average) > 0.1):
-                to_rotate = (self.left_angle + rotate_to_space_epsilon)
-                print("will rotate:", to_rotate)
-                self.move2(calc_goal(0, to_rotate))
-
-            elif ((right_out_box_average- right_box_average) > 0.1):
-                to_rotate = (self.right_angle + rotate_to_space_epsilon)
-                print("will rotate:", to_rotate)
-                self.move2(calc_goal(0, to_rotate))
+       #     elif ((right_outer_med - right_inner_med) > 0.1):
+       #         self.moving = True
+       #         to_rotate = (self.right_angle + rotate_to_space_epsilon)
+       #         print("will rotate right:", to_rotate)
+       #         self.move2(calc_goal(0, to_rotate))
 
         plt.draw()
         plt.pause(0.000000001)
@@ -237,10 +235,11 @@ class MoveBase():
       return np.average(xs)
 
     def find_angle(self, box_x, total_width, openning_angle):
+      fix_constant = np.deg2rad(-10)
       half_width = 0.5 * total_width
       img_plane_z = half_width / np.tan(0.5 * openning_angle)
       x_from_center = box_x - half_width
-      return np.arctan2(x_from_center, img_plane_z)
+      return -np.arctan2(x_from_center, img_plane_z) + fix_constant
 
 if __name__ == '__main__':
     try:
