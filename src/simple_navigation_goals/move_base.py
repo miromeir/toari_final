@@ -78,8 +78,7 @@ class MoveBase():
 
                 self.right_angle = int(np.rad2deg(self.find_angle(x, hsv_img.shape[1], self.OPENNING_ANGLE)))
                 self.left_angle = int(np.rad2deg(self.find_angle(x + w, hsv_img.shape[1], self.OPENNING_ANGLE)))
-
-                if w > 70 and (len(mask.nonzero()[1]) > 5000):
+                if w > 70 and (len(mask.nonzero()[1]) > 5000) and (250 < (x + w /2) < 450):
                     self.has_box = True
 
             cv2.imshow('title', cv2.cvtColor(hsv_img, cv2.COLOR_HSV2BGR))
@@ -111,8 +110,8 @@ class MoveBase():
 
         plt.cla()
         plt.plot(cloud[:,0], cloud[:, 1], '*')
-        plt.ylim(-2, 2)
-        plt.xlim(-2, 2)
+        plt.ylim(-5, 5)
+        plt.xlim(-5, 5)
 
 
         cloud_angles = np.rad2deg(np.arctan2(cloud[:, 1], cloud[:, 0]))
@@ -128,7 +127,26 @@ class MoveBase():
                               (cloud_angles < self.angle + 5)]
            plt.plot(box_approx[:, 0], box_approx[:, 1],'+', color='red')
            box_point = box_approx[box_approx.shape[0] / 2]
-           plt.plot(box_point[0], box_point[1], '+', color='yellow')
+
+           box_index = np.where(cloud == box_point)[0][0]
+
+      #     plt.plot(box_point[0], box_point[1], '+', color='yellow')
+             
+           range_to_check = 20
+           to_test_left = cloud[box_index: box_index + range_to_check, :]
+           to_test_right = np.array([cloud[box_index - i,:] for i in range(range_to_check)])
+
+           plt.plot(to_test_left[:,0], to_test_left[:,1], '*', color='orange')
+           plt.plot(to_test_right[:,0], to_test_right[:,1], '*', color='yellow')
+
+           target = next(((pl if pl[2] > (box_point[2] + 0.1) else pr)
+                          for pl, pr in zip(to_test_left, to_test_right)
+                          if (pl[2] > (box_point[2] + 0.1)) or (pr[2] > (box_point[2] + 0.1))),
+                         None)
+
+           if target is not None:
+               print("target", target)
+               plt.plot(target[0], target[1], '+', color='pink', markersize=50)
            # cases = [
            # (left_outer_med, left_inner_med, self.left_angle + rotate_to_space_epsilon),
            # (right_outer_med, right_inner_med, self.right_angle - rotate_to_space_epsilon)
@@ -235,7 +253,7 @@ class MoveBase():
       return np.average(xs)
 
     def find_angle(self, box_x, total_width, openning_angle):
-      fix_constant = np.deg2rad(-10)
+      fix_constant = np.deg2rad(-5)
       half_width = 0.5 * total_width
       img_plane_z = half_width / np.tan(0.5 * openning_angle)
       x_from_center = box_x - half_width
