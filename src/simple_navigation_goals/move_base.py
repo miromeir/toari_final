@@ -147,6 +147,8 @@ class MoveBase():
            if target is not None:
                print("target", target)
                plt.plot(target[0], target[1], '+', color='pink', markersize=50)
+               target_angle = np.arctan2(target[1], target[0])
+               self.move2(calc_goal(0, target_angle))
            # cases = [
            # (left_outer_med, left_inner_med, self.left_angle + rotate_to_space_epsilon),
            # (right_outer_med, right_inner_med, self.right_angle - rotate_to_space_epsilon)
