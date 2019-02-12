@@ -15,7 +15,9 @@ import numpy as np
 from operator import add, sub
 import tf
 from tf.transformations import quaternion_from_euler
-# from matplotlib import pyplot as plt
+from laser_geometry import LaserProjection
+import sensor_msgs.point_cloud2 as pc2
+from matplotlib import pyplot as plt
 
 
 def dist_for_angle(ranges, angle):
@@ -41,6 +43,7 @@ def calc_goal(dist, angle):
     return goal
 
 class MoveBase():
+
     def img_callback(self, data):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
@@ -100,6 +103,21 @@ class MoveBase():
 
 
     def scan_callback(self, data):
+        cloud = self.proj.projectLaser(data)
+        cloud = np.array(list(pc2.read_points(cloud, skip_nans=True, field_names=("x", "y", "z"))))
+        plt.cla()
+        plt.plot(cloud[:,0], cloud[:, 1], '*')
+        plt.ylim(-2, 2)
+        plt.xlim(-2, 2)
+
+
+        cloud_angles = np.rad2deg(np.arctan2(cloud[:, 1], cloud[:, 0]))
+
+        to_mark = cloud[(cloud_angles > 10) & (cloud_angles < 20)]
+        plt.plot(to_mark[:,0], to_mark[:,1],'+' , color='red')
+        plt.draw()
+        plt.pause(0.000000001)
+        return
         avg_calc_range = 10
         rotate_to_space_epsilon = 10
         if self.has_box:
@@ -132,7 +150,13 @@ class MoveBase():
                 print("will rotate:", to_rotate)
                 self.move2(calc_goal(0, to_rotate))
 
+        plt.draw()
+        plt.pause(0.000000001)
+
     def __init__(self):
+        plt.ion()
+        plt.show()
+        self.proj = LaserProjection()
         rospy.init_node('nav_test', anonymous=False)
         self.bridge = CvBridge()
         self.OPENNING_ANGLE = np.deg2rad(60)
