@@ -55,12 +55,12 @@ class MoveBase():
             color_hsv = cv2.cvtColor(color_hsv,cv2.COLOR_BGR2HSV)
             color_hsv = color_hsv[0][0]
 
-            lower = (color_hsv[0]-20 if color_hsv[0]-30 > 0 else 0,
-                        90,
-                        90)
-            upper = (color_hsv[0]+20 if color_hsv[0]+30 < 180 else 255,
-                        230,
-                        230)
+            lower = (max(color_hsv[0] - 35, 0),
+                        20,
+                        20)
+            upper = (color_hsv[0]+35 if color_hsv[0]+35 < 180 else 255,
+                        255,
+                        255)
 
             lower = np.array(lower, dtype = "uint8")
             upper = np.array(upper, dtype = "uint8")
@@ -103,6 +103,8 @@ class MoveBase():
 
 
     def scan_callback(self, data):
+        if self.moving:
+            return
         cloud = self.proj.projectLaser(data)
         cloud = np.array(list(pc2.read_points(cloud, skip_nans=True, field_names=("x", "y", "z"))))
         cloud_norms = norm(cloud[:,:2], axis=1)
@@ -131,7 +133,7 @@ class MoveBase():
            box_index = np.where(cloud == box_point)[0][0]
 
       #     plt.plot(box_point[0], box_point[1], '+', color='yellow')
-             
+
            range_to_check = 20
            to_test_left = cloud[box_index: box_index + range_to_check, :]
            to_test_right = np.array([cloud[box_index - i,:] for i in range(range_to_check)])
@@ -139,16 +141,20 @@ class MoveBase():
            plt.plot(to_test_left[:,0], to_test_left[:,1], '*', color='orange')
            plt.plot(to_test_right[:,0], to_test_right[:,1], '*', color='yellow')
 
-           target = next(((pl if pl[2] > (box_point[2] + 0.1) else pr)
+           target = next((((pl, 1) if pl[2] > (box_point[2] + 0.1) else (pr, -1))
                           for pl, pr in zip(to_test_left, to_test_right)
                           if (pl[2] > (box_point[2] + 0.1)) or (pr[2] > (box_point[2] + 0.1))),
                          None)
 
-           if target is not None:
-               print("target", target)
+           if (target is not None) and (not self.moving):
+               target, s = target
+               print("target", target, "s", s)
                plt.plot(target[0], target[1], '+', color='pink', markersize=50)
                target_angle = np.arctan2(target[1], target[0])
-               self.move2(calc_goal(0, target_angle))
+               self.move2(calc_goal(0, np.rad2deg(target_angle) + s * 7))
+               self.move2(calc_goal(box_point[2] + 0.2,
+                                    s * -90))
+               self.moving = True
            # cases = [
            # (left_outer_med, left_inner_med, self.left_angle + rotate_to_space_epsilon),
            # (right_outer_med, right_inner_med, self.right_angle - rotate_to_space_epsilon)
@@ -219,7 +225,7 @@ class MoveBase():
     def move2(self, goal):
         # Send the goal pose to the MoveBaseAction server
         self.move_base.send_goal(goal)
-        finished = self.move_base.wait_for_result(rospy.Duration(30))
+        finished = self.move_base.wait_for_result(rospy.Duration(120))
 
         if not finished:
              print("not finished within time")
