@@ -20,6 +20,64 @@ from laser_geometry import LaserProjection
 import sensor_msgs.point_cloud2 as pc2
 from matplotlib import pyplot as plt
 
+def state_navigate(cloud, has_box, box_x, cmdvel_pub):
+    msg = Twist()
+    if not has_box:
+        msg.linear.x = 0.1
+        cmdvel_pub.publish(msg)
+        return state_navigate
+    else:
+        msg.linear.x = 0
+        cmdvel_pub.publish(msg)
+        return state_center_box
+
+def is_box_in_center(has_box, box_x):
+    return has_box and (260 <= box_x <= 360)
+
+def state_center_box(cloud, has_box, box_x, cmdvel_pub):
+    msg = Twist()
+    if is_box_in_center(has_box, box_x):
+        msg.angular.z = 0
+        cmdvel_pub.publish(msg)
+        return state_move_to_box
+    elif box_x < 260:
+        msg.angular.z = 0.1
+        cmdvel_pub.publish(msg)
+        return state_center_box
+    else:
+        # rotate left
+        msg.angular.z = -0.1
+        cmdvel_pub.publish(msg)
+        return state_center_box
+
+def reached_box_front(cloud_in_openning):
+    print("max is: {}".format(np.max(cloud_in_openning[:,2])))
+    return np.max(cloud_in_openning[:,2]) < 0.3
+
+def mark_points(cloud, **kwargs):
+    plt.plot(cloud[:,0], cloud[:,1],"*", **kwargs)
+
+def state_move_to_box(cloud, has_box, box_x, cmdvel_pub):
+    openning_angle = 10
+    in_opening = cloud[(cloud[:, -1] >= -openning_angle) & (cloud[:,-1] <=openning_angle)]
+    mark_points(in_opening, color="red")
+
+    msg = Twist()
+    if not is_box_in_center(has_box, box_x):
+        msg.linear.x = 0
+        cmdvel_pub.publish(msg)
+        return state_center_box
+    elif not reached_box_front(in_opening):
+        msg.linear.x = 0.05
+        cmdvel_pub.publish(msg)
+        return state_move_to_box
+    else:
+        msg.linear.x = 0
+        cmdvel_pub.publish(msg)
+        return state_5
+
+def state_5(cloud, cmdvel_pub, **kwargs):
+    return state_5
 
 def dist_for_angle(ranges, angle):
     result = ranges[(angle  + 360) % 360]
@@ -69,6 +127,7 @@ class MoveBase():
             sorted_by_perimiter = sorted(contours,key = lambda x: cv2.arcLength(x,False))
 
             self.has_box = False
+            self.box_x = 0
             if(len(sorted_by_perimiter)>0):
                 selected_contour = sorted_by_perimiter[-1] #largest contour
                 (x,y),radius = cv2.minEnclosingCircle(selected_contour)
@@ -78,8 +137,9 @@ class MoveBase():
 
                 self.right_angle = int(np.rad2deg(self.find_angle(x, hsv_img.shape[1], self.OPENNING_ANGLE)))
                 self.left_angle = int(np.rad2deg(self.find_angle(x + w, hsv_img.shape[1], self.OPENNING_ANGLE)))
-                if w > 70 and (len(mask.nonzero()[1]) > 5000) and (250 < (x + w /2) < 450):
+                if w > 70 and (len(mask.nonzero()[1]) > 5000):
                     self.has_box = True
+                    self.box_x = (x + w/2)
 
             cv2.imshow('title', cv2.cvtColor(hsv_img, cv2.COLOR_HSV2BGR))
             cv2.waitKey(100)
@@ -108,74 +168,25 @@ class MoveBase():
         cloud = self.proj.projectLaser(data)
         cloud = np.array(list(pc2.read_points(cloud, skip_nans=True, field_names=("x", "y", "z"))))
         cloud_norms = norm(cloud[:,:2], axis=1)
-        cloud = np.c_[cloud[:, :2], cloud_norms]
-
+        cloud_angles = np.rad2deg(np.arctan2(cloud[:, 1], cloud[:, 0]))
+        cloud = np.c_[cloud[:, :2], cloud_norms, cloud_angles]
         plt.cla()
         plt.plot(cloud[:,0], cloud[:, 1], '*')
         plt.ylim(-5, 5)
         plt.xlim(-5, 5)
 
+        self.state = self.state(cloud=cloud,
+                                has_box=self.has_box,
+                                box_x=self.box_x,
+                                cmdvel_pub=self.cmd_vel_pub)
 
-        cloud_angles = np.rad2deg(np.arctan2(cloud[:, 1], cloud[:, 0]))
 
-
-        to_mark = cloud[(cloud_angles > 10) & (cloud_angles < 20)]
-        avg_calc_range = 10
-        rotate_to_space_epsilon = 10
-
-        if self.has_box:
-
-           box_approx = cloud[(cloud_angles > self.angle - 5) &
-                              (cloud_angles < self.angle + 5)]
-           plt.plot(box_approx[:, 0], box_approx[:, 1],'+', color='red')
-           box_point = box_approx[box_approx.shape[0] / 2]
-
-           box_index = np.where(cloud == box_point)[0][0]
-
-      #     plt.plot(box_point[0], box_point[1], '+', color='yellow')
-
-           range_to_check = 20
-           to_test_left = cloud[box_index: box_index + range_to_check, :]
-           to_test_right = np.array([cloud[box_index - i,:] for i in range(range_to_check)])
-
-           plt.plot(to_test_left[:,0], to_test_left[:,1], '*', color='orange')
-           plt.plot(to_test_right[:,0], to_test_right[:,1], '*', color='yellow')
-
-           target = next((((pl, 1) if pl[2] > (box_point[2] + 0.1) else (pr, -1))
-                          for pl, pr in zip(to_test_left, to_test_right)
-                          if (pl[2] > (box_point[2] + 0.1)) or (pr[2] > (box_point[2] + 0.1))),
-                         None)
-
-           if (target is not None) and (not self.moving):
-               target, s = target
-               print("target", target, "s", s)
-               plt.plot(target[0], target[1], '+', color='pink', markersize=50)
-               target_angle = np.arctan2(target[1], target[0])
-               self.move2(calc_goal(0, np.rad2deg(target_angle) + s * 7))
-               self.move2(calc_goal(box_point[2] + 0.2,
-                                    s * -90))
-               self.moving = True
-           # cases = [
-           # (left_outer_med, left_inner_med, self.left_angle + rotate_to_space_epsilon),
-           # (right_outer_med, right_inner_med, self.right_angle - rotate_to_space_epsilon)
-           # ]
-           # for outer_med, inner_med, to_rotate in sorted(cases,
-           #                                               key=lambda x: x[1] - x[0]):
-           #     if ((outer_med - inner_med) > 0.1) and (inner_med < 0.6):
-           #        self.moving = True
-           #        print("will rotate:", to_rotate)
-           #        self.move2(calc_goal(0, to_rotate))
-           #        self.move2(calc_goal(inner_med + 0.1, 0))
-           #        break
-
-       #     elif ((right_outer_med - right_inner_med) > 0.1):
-       #         self.moving = True
-       #         to_rotate = (self.right_angle + rotate_to_space_epsilon)
-       #         print("will rotate right:", to_rotate)
-       #         self.move2(calc_goal(0, to_rotate))
-
+        plt.title("state: " + self.state.__name__)
         plt.draw()
         plt.pause(0.000000001)
+
+
+        
 
     def __init__(self):
         plt.ion()
@@ -185,13 +196,15 @@ class MoveBase():
         self.bridge = CvBridge()
         self.OPENNING_ANGLE = np.deg2rad(60)
         self.has_box = False
+        self.box_x = 0
         self.moving = False
         rospy.Subscriber("/usb_cam/image_raw", Image, self.img_callback)
         rospy.Subscriber('scan',LaserScan,self.scan_callback)
-
+	
 
         rospy.on_shutdown(self.shutdown)
 
+        self.state = state_navigate
         # Publisher to manually control the robot (e.g. to stop it)
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist)
 
