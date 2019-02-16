@@ -95,10 +95,28 @@ def state_box_to_right(cloud, cmdvel_pub, **kwargs):
     else:
         msg.angular.z = 0
         cmdvel_pub.publish(msg)
-        return state_5
+        return state_box_edge
 
-def state_5(**kwargs):
-    return state_5
+def is_robot_in_edge(cloud):
+    if len(cloud) == 0:
+        return False
+    print(np.min(cloud[:,2]))
+    return np.min(cloud[:,2]) > 0.3
+
+def state_box_edge(cloud, cmdvel_pub, **kwargs):
+    cloud_right = of_angles(cloud, -110, -85)
+    msg = Twist()
+    if not is_robot_in_edge(cloud_right):
+        msg.linear.x = 0.01
+        cmdvel_pub.publish(msg)
+        return state_box_edge
+    else:
+        msg.linear.x = 0
+        cmdvel_pub.publish(msg)
+        return state_6
+
+def state_6(**kwargs):
+    return state_6
 
 def dist_for_angle(ranges, angle):
     result = ranges[(angle  + 360) % 360]
