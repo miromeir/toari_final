@@ -31,6 +31,9 @@ def state_navigate(cloud, has_box, box_x, cmdvel_pub):
         cmdvel_pub.publish(msg)
         return state_center_box
 
+def of_angles(cloud, minang, maxang):
+    return cloud[(cloud[:, -1] >= minang) & (cloud[:,-1] <= maxang)]
+
 def is_box_in_center(has_box, box_x):
     return has_box and (260 <= box_x <= 360)
 
@@ -59,7 +62,7 @@ def mark_points(cloud, **kwargs):
 
 def state_move_to_box(cloud, has_box, box_x, cmdvel_pub):
     openning_angle = 10
-    in_opening = cloud[(cloud[:, -1] >= -openning_angle) & (cloud[:,-1] <=openning_angle)]
+    in_opening = of_angles(cloud, -openning_angle, openning_angle)
     mark_points(in_opening, color="red")
 
     msg = Twist()
@@ -74,9 +77,27 @@ def state_move_to_box(cloud, has_box, box_x, cmdvel_pub):
     else:
         msg.linear.x = 0
         cmdvel_pub.publish(msg)
+        return state_box_to_right
+
+def is_box_on_right(cloud):
+    if len(cloud) == 0:
+        return False
+    return np.max(cloud[:,2]) < 0.3
+
+def state_box_to_right(cloud, cmdvel_pub, **kwargs):
+    cloud_right = of_angles(cloud, -110, -85)
+    mark_points(cloud_right, color="red")
+    msg = Twist()
+    if not is_box_on_right(cloud_right):
+        msg.angular.z = 0.1
+        cmdvel_pub.publish(msg)
+        return state_box_to_right
+    else:
+        msg.angular.z = 0
+        cmdvel_pub.publish(msg)
         return state_5
 
-def state_5(cloud, cmdvel_pub, **kwargs):
+def state_5(**kwargs):
     return state_5
 
 def dist_for_angle(ranges, angle):
