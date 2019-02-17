@@ -35,6 +35,17 @@ This uses a finite state machine and utilizes the ros navigation package.
  ## Point Cloud
  From the laser scan topic we generated a point cloud map using `point_cloud` package. It was
  Used as a safer alternative to examening the laser topic directly as it eliminates untracked points.
- For each point we can calculate its distance to the robot using $\sqrt{x^2 + y^2}$ and its angle to the robot using
+ For each point we can calculate its distance to the robot using `sqrt(x^2 + y^2)` and its angle to the robot using
  `np.arctan2(y,x)`
- ## 
+ 
+ ## State machine
+ The flow of the program uses a finite state machine such that at each run of the laser callback,
+ The current state decides what action to perform and what state to go to next (could be the same sate).
+ 
+ Here is a diagram of the states in the program:
+ 
+Some of the main states:
+* **Center_box** - If box is recognized but not in center, rotate to right direction.
+* **Move towards box** - If the box is  recognized and at center move towards it until the box is close. 
+                         enough (determined via laser scan). If the box gets out of center, return to previous state.
+* **Move to edge** - After reaching the box move until the box is far enough to go to push state.
