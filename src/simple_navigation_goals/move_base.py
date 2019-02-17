@@ -19,13 +19,41 @@ from tf.transformations import quaternion_from_euler
 from laser_geometry import LaserProjection
 import sensor_msgs.point_cloud2 as pc2
 from matplotlib import pyplot as plt
+def done_cb(terminal_state, result):
+    print("done_cb")
+    print(terminal_state, result)
+def active_cb(self):
+    print("active_cb")
+def feedback_cb(feedback):
+    print("feedback_cb")
 
-def state_navigate(cloud, has_box, box_x, cmdvel_pub):
+def navigate_goal(move_base):
+    goal = MoveBaseGoal()
+
+    goal.target_pose.header.frame_id = 'map'
+    goal.target_pose.header.stamp = rospy.Time.now()
+    goal.target_pose.pose = Pose(Point(-2.30499958992, 0.830000281334, 0),
+                                 Quaternion(0, 0, 0.952295570002, 0.305177239247))
+    move_base.send_goal(goal , done_cb, active_cb, feedback_cb)
+
+def clear_goals(move_base):
+    move_base.cancel_all_goals()
+
+def state_start(move_base, **kwargs):
+    navigate_goal(move_base)
+    return state_wait_for_box
+
+def state_wait_for_box(has_box, move_base, **kwargs):
+    if not has_box:
+        return state_wait_for_box
+    else:
+        clear_goals(move_base)
+        return state_navigate
+
+def state_navigate(cloud, has_box, box_x, cmdvel_pub, **kwargs):
     msg = Twist()
     if not has_box:
-        msg.linear.x = 0.1
-        cmdvel_pub.publish(msg)
-        return state_navigate
+        return state_start
     else:
         msg.linear.x = 0
         cmdvel_pub.publish(msg)
@@ -37,7 +65,7 @@ def of_angles(cloud, minang, maxang):
 def is_box_in_center(has_box, box_x):
     return has_box and (260 <= box_x <= 360)
 
-def state_center_box(cloud, has_box, box_x, cmdvel_pub):
+def state_center_box(cloud, has_box, box_x, cmdvel_pub, **kwargs):
     msg = Twist()
     if is_box_in_center(has_box, box_x):
         msg.angular.z = 0
@@ -60,7 +88,7 @@ def reached_box_front(cloud_in_openning):
 def mark_points(cloud, **kwargs):
     plt.plot(cloud[:,0], cloud[:,1],"*", **kwargs)
 
-def state_move_to_box(cloud, has_box, box_x, cmdvel_pub):
+def state_move_to_box(cloud, has_box, box_x, cmdvel_pub, **kwargs):
     openning_angle = 10
     in_opening = of_angles(cloud, -openning_angle, openning_angle)
     mark_points(in_opening, color="red")
@@ -148,8 +176,12 @@ def state_script(cmdvel_pub, **kwargs):
 
     return state_end
 
-def state_end(**kwargs):
-    return state_end
+def state_end(move_base, **kwargs):
+    navigate_goal(move_base)
+    return state_end_end
+
+def state_end_end(**kwargs):
+    return state_end_end
 
 def dist_for_angle(ranges, angle):
     result = ranges[(angle  + 360) % 360]
@@ -164,6 +196,9 @@ def calc_vec(angle, dist):
 def box_vector(ranges, theta_center):
     p_center = calv_vec(theta_center, dist_for_angle(angle))
 
+def target_goal():
+    goal = MoveBaseGoal()
+    goal.target_
 def calc_goal(dist, angle):
     goal = MoveBaseGoal()
 
@@ -246,10 +281,13 @@ class MoveBase():
         plt.plot(cloud[:,0], cloud[:, 1], '*')
         plt.ylim(-5, 5)
         plt.xlim(-5, 5)
-
+        if getattr(self, 'move_base', None) is None:
+            print("wait for move base...")
+            return
         self.state = self.state(cloud=cloud,
                                 has_box=self.has_box,
                                 box_x=self.box_x,
+                                move_base=self.move_base,
                                 cmdvel_pub=self.cmd_vel_pub)
 
 
@@ -276,17 +314,17 @@ class MoveBase():
 
         rospy.on_shutdown(self.shutdown)
 
-        self.state = state_navigate
+        self.state = state_start
         # Publisher to manually control the robot (e.g. to stop it)
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist)
 
         # Subscribe to the move_base action server
-      #  self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
+        self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
 
         rospy.loginfo("Waiting for move_base action server...")
 
         # Wait 60 seconds for the action server to become available
-      #  self.move_base.wait_for_server(rospy.Duration(60))
+        self.move_base.wait_for_server(rospy.Duration(60))
 
         rospy.loginfo("Connected to move base server")
         rospy.loginfo("Starting navigation test")
