@@ -33,4 +33,8 @@ This uses a finite state machine and utilizes the ros navigation package.
  and exploring the histogram:
  
  ## Point Cloud
+ From the laser scan topic we generated a point cloud map using `point_cloud` package. It was
+ Used as a safer alternative to examening the laser topic directly as it eliminates untracked points.
+ For each point we can calculate its distance to the robot using $\sqrt{x^2 + y^2}$ and its angle to the robot using
+ `np.arctan2(y,x)`
  ## 
