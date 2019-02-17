@@ -55,7 +55,7 @@ def state_center_box(cloud, has_box, box_x, cmdvel_pub):
 
 def reached_box_front(cloud_in_openning):
     print("max is: {}".format(np.max(cloud_in_openning[:,2])))
-    return np.max(cloud_in_openning[:,2]) < 0.3
+    return np.max(cloud_in_openning[:,2]) < 0.18
 
 def mark_points(cloud, **kwargs):
     plt.plot(cloud[:,0], cloud[:,1],"*", **kwargs)
@@ -82,11 +82,11 @@ def state_move_to_box(cloud, has_box, box_x, cmdvel_pub):
 def is_box_on_right(cloud):
     if len(cloud) == 0:
         return False
-    return np.max(cloud[:,2]) < 0.3
+    return np.max(cloud[:,2]) < 0.15
 
 def state_box_to_right(cloud, cmdvel_pub, **kwargs):
     cloud_right = of_angles(cloud, -110, -85)
-    mark_points(cloud_right, color="red")
+    mark_points(cloud_right, color="yellow")
     msg = Twist()
     if not is_box_on_right(cloud_right):
         msg.angular.z = 0.1
@@ -101,10 +101,11 @@ def is_robot_in_edge(cloud):
     if len(cloud) == 0:
         return False
     print(np.min(cloud[:,2]))
-    return np.min(cloud[:,2]) > 0.3
+    return np.min(cloud[:,2]) > 0.20
 
 def state_box_edge(cloud, cmdvel_pub, **kwargs):
-    cloud_right = of_angles(cloud, -110, -85)
+    cloud_right = of_angles(cloud, -130, -100)
+    mark_points(cloud_right, color='pink')
     msg = Twist()
     if not is_robot_in_edge(cloud_right):
         msg.linear.x = 0.01
@@ -113,10 +114,42 @@ def state_box_edge(cloud, cmdvel_pub, **kwargs):
     else:
         msg.linear.x = 0
         cmdvel_pub.publish(msg)
-        return state_6
+        return state_script
 
-def state_6(**kwargs):
-    return state_6
+def rotate_90_right(cmdvel_pub):
+  # Rotate right 90 
+    msg = Twist()
+    msg.angular.z = -0.2
+    cmdvel_pub.publish(msg)
+    rospy.sleep(7.5) 
+    msg.angular.z = 0
+    cmdvel_pub.publish(msg)
+
+def state_script(cmdvel_pub, **kwargs):
+    rotate_90_right(cmdvel_pub) 
+
+    # Move farword
+    msg = Twist()
+    msg.linear.x = 0.05
+    cmdvel_pub.publish(msg)
+    rospy.sleep(3.5) 
+    msg.linear.x = 0
+    cmdvel_pub.publish(msg)
+
+    rotate_90_right(cmdvel_pub)
+
+    # Push box
+    msg = Twist()
+    msg.linear.x = 0.05
+    cmdvel_pub.publish(msg)
+    rospy.sleep(9) 
+    msg.linear.x = 0
+    cmdvel_pub.publish(msg)
+
+    return state_end
+
+def state_end(**kwargs):
+    return state_end
 
 def dist_for_angle(ranges, angle):
     result = ranges[(angle  + 360) % 360]
@@ -146,7 +179,7 @@ class MoveBase():
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
             hsv_img = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)[200:, :]
-            color = (255,0,0)
+            color = (174,134,93)
             color_hsv = np.array(color,dtype="uint8")
             color_hsv = np.array([[color_hsv]],dtype="uint8")
             color_hsv = cv2.cvtColor(color_hsv,cv2.COLOR_BGR2HSV)
@@ -248,12 +281,12 @@ class MoveBase():
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist)
 
         # Subscribe to the move_base action server
-        self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
+      #  self.move_base = actionlib.SimpleActionClient("move_base", MoveBaseAction)
 
         rospy.loginfo("Waiting for move_base action server...")
 
         # Wait 60 seconds for the action server to become available
-        self.move_base.wait_for_server(rospy.Duration(60))
+      #  self.move_base.wait_for_server(rospy.Duration(60))
 
         rospy.loginfo("Connected to move base server")
         rospy.loginfo("Starting navigation test")
