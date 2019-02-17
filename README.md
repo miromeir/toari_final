@@ -7,7 +7,8 @@ This is an implementation of maze navigation for Turtlebot 3. The robot should
 * Continue the navigation to maze exit
 This uses a finite state machine and utilizes the ros navigation package.
 
-## Running the code
+# Running the code
+* First make sure to `cd` into the catkin_workspace directory
 * Before running the code, a mapping of the maze needs to be run, we used the gmapping to do so. Use the command
   ```bash
   roslaunch turtlebot3_navigation turtlebot3_navigation.launch map_file:=$HOME/map.yaml
@@ -20,3 +21,16 @@ This uses a finite state machine and utilizes the ros navigation package.
   ```bash
   roslaunch turtlebot3_navigation turtlebot3_navigation.launch map_file:=$HOME/map.yaml
   ```
+* Run the maze navigation program using
+ ```bash
+ rosrun simple_navigation_goals move_base.py
+ ```
+ 
+ # Algorithm
+ ## Box Identification
+ The box identifaction was used via the camera topic `usb_cam/image_raw` and the opencv_bridge pacakge.
+ The identification was done via HSV parameters that where determing via exmaning verious pictures of the box
+ and exploring the histogram:
+ 
+ ## Point Cloud
+ ## 
