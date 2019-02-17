@@ -11,7 +11,7 @@ This uses a finite state machine and utilizes the ros navigation package.
 * First make sure to `cd` into the catkin_workspace directory
 * Before running the code, a mapping of the maze needs to be run, we used the gmapping to do so. Use the command
   ```bash
-  roslaunch turtlebot3_navigation turtlebot3_navigation.launch map_file:=$HOME/map.yaml
+  roslaunch turtlebot3_slam turtlebot3_slam.launch slam_methods:=gmapping
   ```
   And save the map via
   ```bash
