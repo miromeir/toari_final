@@ -2,9 +2,9 @@
 ## Abstract
 This is an implementation of maze navigation for Turtlebot 3. The robot should
 * Map the maze
-* Navigate to maze exit until locating a blue box
+* Navigate to the maze exit until locating a blue box
 * Move the box out of the way
-* Continue the navigation to maze exit
+* Continue the navigation to the maze exit.
 This uses a finite state machine and utilizes the ros navigation package.
 
 # Running the code
