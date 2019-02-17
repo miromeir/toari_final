@@ -31,6 +31,7 @@ This uses a finite state machine and utilizes the ros navigation package.
  The box identifaction was used via the camera topic `usb_cam/image_raw` and the opencv_bridge pacakge.
  The identification was done via HSV parameters that where determing via exmaning verious pictures of the box
  and exploring the histogram:
+ ![alt text](hists.png "move wowards")
  
  ## Point Cloud
  From the laser scan topic we generated a point cloud map using `point_cloud` package. It was
