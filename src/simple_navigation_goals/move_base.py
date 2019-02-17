@@ -22,7 +22,7 @@ from matplotlib import pyplot as plt
 def done_cb(terminal_state, result):
     print("done_cb")
     print(terminal_state, result)
-def active_cb(self):
+def active_cb():
     print("active_cb")
 def feedback_cb(feedback):
     print("feedback_cb")
@@ -32,7 +32,9 @@ def navigate_goal(move_base):
 
     goal.target_pose.header.frame_id = 'map'
     goal.target_pose.header.stamp = rospy.Time.now()
-    goal.target_pose.pose = Pose(Point(-2.30499958992, 0.830000281334, 0),
+#    goal.target_pose.pose = Pose(Point(-2.30499958992, 0.830000281334, 0),
+#                                 Quaternion(0, 0, 0.952295570002, 0.305177239247))
+    goal.target_pose.pose = Pose(Point(-1.96499967575, 0.520000219345, 0),
                                  Quaternion(0, 0, 0.952295570002, 0.305177239247))
     move_base.send_goal(goal , done_cb, active_cb, feedback_cb)
 
