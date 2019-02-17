@@ -49,5 +49,5 @@ Some of the main states:
 * **Move towards box** - If the box is  recognized and at center move towards it until the box is close. 
                          enough (determined via laser scan). If the box gets out of center, return to previous state.
                           
-  ![alt text](robot1.png "move wowards")
+  ![alt text](robot1.jpeg "move wowards")
 * **Move to edge** - After reaching the box move until the box is far enough to go to push state.
