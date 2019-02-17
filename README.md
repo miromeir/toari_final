@@ -40,6 +40,7 @@ This uses a finite state machine and utilizes the ros navigation package.
  `np.arctan2(y,x)`
  
  ## State machine
+ ![alt text](statem.jpeg "move wowards")
  The flow of the program uses a finite state machine such that at each run of the laser callback,
  The current state decides what action to perform and what state to go to next (could be the same sate).
  
